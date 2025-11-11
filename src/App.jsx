@@ -6,22 +6,16 @@ import AddTaskModal from "./components/AddTaskModal";
 import AddFollowUpModal from "./components/AddFollowUpModal";
 import "./styles.css";
 
-const STORAGE_KEY = "knk_tasks_v1";
+const STORAGE_KEY = "knk_tasks_v4";
 
 const BottomNav = ({ active }) => {
   const navigate = useNavigate();
   return (
     <div className="bottom-nav">
-      <button
-        className={active === "tasks" ? "active" : ""}
-        onClick={() => navigate("/")}
-      >
+      <button className={active === "tasks" ? "active" : ""} onClick={() => navigate("/")}>
         Tasks
       </button>
-      <button
-        className={active === "dashboard" ? "active" : ""}
-        onClick={() => navigate("/dashboard")}
-      >
+      <button className={active === "dashboard" ? "active" : ""} onClick={() => navigate("/dashboard")}>
         Dashboard
       </button>
     </div>
@@ -38,27 +32,28 @@ const App = () => {
     }
   });
 
+  const [projects, setProjects] = useState(["Greenland", "Sriniketan"]);
+  const [departments, setDepartments] = useState(["Marketing", "Sales", "Admin", "Legal", "Accounts", "Liaisoning"]);
+
   const [showAddTask, setShowAddTask] = useState(false);
   const [showAddFollowUp, setShowAddFollowUp] = useState(false);
   const [followUpTargetTaskId, setFollowUpTargetTaskId] = useState(null);
 
-  // Save to localStorage whenever tasks change
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-    } catch (e) {
-      console.warn("localStorage error", e);
-    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
   }, [tasks]);
 
-  // Add new task
   const handleAddTask = (newTask) => {
-    const task = { id: Date.now(), ...newTask, followUps: [] };
+    const task = {
+      id: Date.now(),
+      ...newTask,
+      createdAt: new Date().toISOString(),
+      followUps: [],
+    };
     setTasks((prev) => [task, ...prev]);
     setShowAddTask(false);
   };
 
-  // Add follow-up (from modal)
   const handleSaveFollowUp = (payload) => {
     setTasks((prev) =>
       prev.map((t) =>
@@ -108,6 +103,10 @@ const App = () => {
             isOpen={showAddTask}
             onClose={() => setShowAddTask(false)}
             onSave={handleAddTask}
+            projects={projects}
+            departments={departments}
+            setProjects={setProjects}
+            setDepartments={setDepartments}
           />
         )}
 
@@ -124,10 +123,7 @@ const App = () => {
           />
         )}
 
-        {/* Floating + for adding a new task */}
-        <button className="fab" onClick={() => setShowAddTask(true)}>
-          +
-        </button>
+        <button className="fab" onClick={() => setShowAddTask(true)}>+</button>
       </div>
     </Router>
   );
