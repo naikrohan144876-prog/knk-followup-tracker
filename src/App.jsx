@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from "react";
+// src/App.jsx
+import React, { useState, useEffect, useRef } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import TaskList from "./components/TaskList";
 import Dashboard from "./components/Dashboard";
 import AddTaskModal from "./components/AddTaskModal";
 import AddFollowUpModal from "./components/AddFollowUpModal";
+import SettingsModal from "./components/SettingsModal";
 import "./styles.css";
 
+const APP_VERSION = "1.0.0";   // update this before sending to friends
 const STORAGE_KEY = "knk_tasks_v4";
 
 const BottomNav = ({ active }) => {
@@ -34,12 +37,17 @@ export default function App() {
   const [showAddTask, setShowAddTask] = useState(false);
   const [showAddFollowUp, setShowAddFollowUp] = useState(false);
   const [followUpTargetTaskId, setFollowUpTargetTaskId] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // file input ref for import
+  const importRef = useRef(null);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
   }, [tasks]);
 
-  // add new task
+  // --- CRUD handlers ---
+
   const handleAddTask = (newTask) => {
     const task = {
       id: Date.now(),
@@ -51,29 +59,116 @@ export default function App() {
     setShowAddTask(false);
   };
 
-  // add follow-up (modal)
   const handleSaveFollowUp = (payload) => {
-    // ensure createdAt on followup
     const fu = { ...payload, createdAt: new Date().toISOString() };
     setTasks(prev => prev.map(t => t.id === fu.taskId ? { ...t, followUps: [...(t.followUps||[]), fu] } : t));
     setShowAddFollowUp(false);
     setFollowUpTargetTaskId(null);
   };
 
-  // open follow-up for a specific task
   const openFollowUpModalFor = (taskId) => {
     setFollowUpTargetTaskId(taskId);
     setShowAddFollowUp(true);
   };
 
-  // optional: add follow-up as a new "task" (if you wanted that behavior)
-  // But follow-ups are stored inside tasks array as requested.
+  // Delete a task entirely (confirmation)
+  const deleteTask = (taskId) => {
+    if (!window.confirm("Delete this task and all its follow-ups?")) return;
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+  };
+
+  // Delete a follow-up inside a task
+  const deleteFollowUp = (taskId, followUpCreatedAtOrIndex) => {
+    if (!window.confirm("Delete this follow-up?")) return;
+    setTasks(prev =>
+      prev.map(t => {
+        if (t.id !== taskId) return t;
+        const newFus = t.followUps.filter((fu, idx) => {
+          // match by createdAt if present else by index
+          if (fu.createdAt && typeof followUpCreatedAtOrIndex === "string") {
+            return fu.createdAt !== followUpCreatedAtOrIndex;
+          }
+          return idx !== followUpCreatedAtOrIndex;
+        });
+        return { ...t, followUps: newFus };
+      })
+    );
+  };
+
+  // Delete project (and clear project field from tasks)
+  const deleteProject = (projectName) => {
+    if (!window.confirm(`Delete project "${projectName}"? This will remove the project from existing tasks.`)) return;
+    setProjects(prev => prev.filter(p => p !== projectName));
+    setTasks(prev => prev.map(t => (t.project === projectName ? { ...t, project: null } : t)));
+  };
+
+  // Delete department similarly
+  const deleteDepartment = (deptName) => {
+    if (!window.confirm(`Delete department "${deptName}"? This will remove the department from existing tasks.`)) return;
+    setDepartments(prev => prev.filter(d => d !== deptName));
+    setTasks(prev => prev.map(t => (t.department === deptName ? { ...t, department: null } : t)));
+  };
+
+  // --- Export & Import ---
+
+  const exportData = () => {
+    const payload = {
+      version: APP_VERSION,
+      exportedAt: new Date().toISOString(),
+      projects,
+      departments,
+      tasks,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const name = `knk-backup-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const onImportFile = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        // Basic validation
+        if (!data || typeof data !== "object") throw new Error("Invalid file");
+        if (!Array.isArray(data.tasks) || !Array.isArray(data.projects) || !Array.isArray(data.departments)) {
+          if (!window.confirm("Import file doesn't look like expected structure. Continue anyway?")) return;
+        }
+        if (!window.confirm("Importing will replace current tasks, projects and departments. Continue?")) return;
+        setProjects(Array.isArray(data.projects) ? data.projects : []);
+        setDepartments(Array.isArray(data.departments) ? data.departments : []);
+        setTasks(Array.isArray(data.tasks) ? data.tasks : []);
+        alert("Import successful");
+      } catch (err) {
+        console.error(err);
+        alert("Failed to import file: " + err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const triggerImport = () => {
+    if (importRef.current) importRef.current.click();
+  };
+
+  const handleFileChosen = (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) onImportFile(f);
+    e.target.value = ""; // reset
+  };
 
   return (
     <Router>
       <div className="app-container">
         <Routes>
-          {/* Default landing: dashboard */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
           <Route path="/dashboard" element={
@@ -88,6 +183,8 @@ export default function App() {
               <TaskList
                 tasks={tasks}
                 onOpenFollowUpModal={openFollowUpModalFor}
+                onDeleteTask={deleteTask}
+                onDeleteFollowUp={deleteFollowUp}
               />
               <BottomNav active="tasks" />
             </>
@@ -118,7 +215,30 @@ export default function App() {
           />
         )}
 
-        {/* Floating + for add task (moved slightly up so it doesn't overlap browser UI) */}
+        {/* Settings modal */}
+        {showSettings && (
+          <SettingsModal
+            projects={projects}
+            departments={departments}
+            setProjects={setProjects}
+            setDepartments={setDepartments}
+            onClose={() => setShowSettings(false)}
+            onDeleteProject={deleteProject}
+            onDeleteDepartment={deleteDepartment}
+          />
+        )}
+
+        {/* floating + and small top right toolbar for import/export/settings */}
+        <div style={{position:'fixed', top:12, right:12, zIndex:1200, display:'flex', gap:8}}>
+          <button className="btn-small" onClick={exportData} title="Export all data">Export</button>
+          <button className="btn-small" onClick={triggerImport} title="Import JSON backup">Import</button>
+          <input ref={importRef} type="file" accept=".json,application/json" style={{display:'none'}} onChange={handleFileChosen} />
+          <button className="btn-small" onClick={() => setShowSettings(true)} title="Manage projects & departments">Settings</button>
+          <div style={{padding:'8px 10px', background:'#fff', borderRadius:10, border:'1px solid #eee', display:'flex', alignItems:'center', fontSize:13}}>
+            v{APP_VERSION}
+          </div>
+        </div>
+
         <button className="fab" onClick={() => setShowAddTask(true)}>+</button>
       </div>
     </Router>
