@@ -1,44 +1,157 @@
-
 import React, { useState } from "react";
 
-const AddTaskModal = ({ isOpen, onClose, onSave }) => {
-  const [taskName, setTaskName] = useState("");
+const AddTaskModal = ({
+  isOpen,
+  onClose,
+  onSave,
+  projects,
+  departments,
+  setProjects,
+  setDepartments,
+}) => {
+  const [name, setName] = useState("");
   const [project, setProject] = useState("");
   const [department, setDepartment] = useState("");
   const [notes, setNotes] = useState("");
+  const [status, setStatus] = useState("Pending");
+  const [followUpDate, setFollowUpDate] = useState("");
+  const [showProjModal, setShowProjModal] = useState(false);
+  const [showDeptModal, setShowDeptModal] = useState(false);
+  const [newProj, setNewProj] = useState("");
+  const [newDept, setNewDept] = useState("");
+
+  const handleSubmit = () => {
+    if (!name.trim()) return alert("Enter task name");
+    const payload = {
+      name: name.trim(),
+      project,
+      department,
+      notes,
+      followUpDate,
+      status,
+    };
+    onSave(payload);
+    onClose();
+    setName("");
+    setProject("");
+    setDepartment("");
+    setNotes("");
+    setFollowUpDate("");
+    setStatus("Pending");
+  };
 
   if (!isOpen) return null;
 
-  const handleSubmit = () => {
-    if (!taskName.trim()) return;
-    onSave({ name: taskName, project, department, notes });
-    onClose();
+  const addNewProject = () => {
+    if (!newProj.trim()) return;
+    setProjects((p) => [...p, newProj]);
+    setProject(newProj);
+    setShowProjModal(false);
+    setNewProj("");
+  };
+
+  const addNewDepartment = () => {
+    if (!newDept.trim()) return;
+    setDepartments((d) => [...d, newDept]);
+    setDepartment(newDept);
+    setShowDeptModal(false);
+    setNewDept("");
   };
 
   return (
     <div className="modal-overlay">
       <div className="modal-container">
-        <h2>Add New Task</h2>
-        <input type="text" placeholder="Task Name" value={taskName} onChange={(e) => setTaskName(e.target.value)} />
-        <select value={project} onChange={(e) => setProject(e.target.value)}>
-          <option value="">Select Project</option>
-          <option value="Greenland">Greenland</option>
-          <option value="Sriniketan">Sriniketan</option>
+        <h2>Add Task</h2>
+
+        <input
+          type="text"
+          placeholder="Task Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+
+        <div className="inline-flex">
+          <select value={project} onChange={(e) => setProject(e.target.value)}>
+            <option value="">Select Project</option>
+            {projects.map((p) => (
+              <option key={p}>{p}</option>
+            ))}
+          </select>
+          <button className="add-mini" onClick={() => setShowProjModal(true)}>
+            +
+          </button>
+        </div>
+
+        <div className="inline-flex">
+          <select
+            value={department}
+            onChange={(e) => setDepartment(e.target.value)}
+          >
+            <option value="">Select Department</option>
+            {departments.map((d) => (
+              <option key={d}>{d}</option>
+            ))}
+          </select>
+          <button className="add-mini" onClick={() => setShowDeptModal(true)}>
+            +
+          </button>
+        </div>
+
+        <label>Next Follow-Up Date & Time</label>
+        <input
+          type="datetime-local"
+          value={followUpDate}
+          onChange={(e) => setFollowUpDate(e.target.value)}
+        />
+
+        <textarea
+          placeholder="Notes / Details"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
+
+        <label>Status</label>
+        <select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option>Pending</option>
+          <option>Completed</option>
         </select>
-        <select value={department} onChange={(e) => setDepartment(e.target.value)}>
-          <option value="">Select Department</option>
-          <option value="Marketing">Marketing</option>
-          <option value="Sales">Sales</option>
-          <option value="Admin">Admin</option>
-          <option value="Legal">Legal</option>
-          <option value="Accounts">Accounts</option>
-          <option value="Liaisoning">Liaisoning</option>
-        </select>
-        <textarea placeholder="Notes / Comments" value={notes} onChange={(e) => setNotes(e.target.value)} />
+
         <div className="modal-actions">
           <button className="btn-cancel" onClick={onClose}>Cancel</button>
           <button className="btn-primary" onClick={handleSubmit}>Save</button>
         </div>
+
+        {showProjModal && (
+          <div className="mini-modal">
+            <div className="mini-box">
+              <h4>Add Project</h4>
+              <input
+                type="text"
+                value={newProj}
+                placeholder="Project name"
+                onChange={(e) => setNewProj(e.target.value)}
+              />
+              <button className="btn-primary" onClick={addNewProject}>Save</button>
+              <button className="btn-cancel" onClick={() => setShowProjModal(false)}>Close</button>
+            </div>
+          </div>
+        )}
+
+        {showDeptModal && (
+          <div className="mini-modal">
+            <div className="mini-box">
+              <h4>Add Department</h4>
+              <input
+                type="text"
+                value={newDept}
+                placeholder="Department name"
+                onChange={(e) => setNewDept(e.target.value)}
+              />
+              <button className="btn-primary" onClick={addNewDepartment}>Save</button>
+              <button className="btn-cancel" onClick={() => setShowDeptModal(false)}>Close</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
