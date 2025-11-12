@@ -1,4 +1,3 @@
-// src/components/SettingsModal.jsx
 import React, { useState } from "react";
 
 const SettingsModal = ({ projects = [], departments = [], setProjects, setDepartments, onClose, onDeleteProject, onDeleteDepartment }) => {
