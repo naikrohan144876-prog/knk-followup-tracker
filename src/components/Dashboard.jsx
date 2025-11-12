@@ -32,18 +32,33 @@ const Dashboard = ({ tasks = [], onCardClick = () => {} }) => {
       if (created >= startOfToday && created < endOfToday) todays++;
       if (created >= startOfToday && created <= endOfWeek) week++;
 
+      // If task has an explicit next followUpDate (from task.followUpDate) treat it as followup too
+      if (t.followUpDate) totalFollowUps++;
+
       const fus = t.followUps || [];
-      totalFollowUps += fus.length;
+      totalFollowUps += Math.max(0, fus.length - (t.followUpDate ? 1 : 0)); // avoid double count if you stored same
       for (const f of fus) {
         if ((f.status || "Pending") === "Pending") pending++; else completed++;
-        if (f.date) {
-          const fd = new Date(f.date);
+        // pick follow-up date from f.date (preferred) else t.followUpDate
+        const dateStr = f.date || t.followUpDate;
+        if (dateStr) {
+          const fd = new Date(dateStr);
           if (fd >= now && fd <= endOfWeek) {
-            upcoming.push({ ...f, taskName: t.name });
+            upcoming.push({ ...f, taskName: t.name, when: dateStr });
           }
         }
       }
+
+      // also check the task.followUpDate (if a task-level next follow-up exist)
+      if (t.followUpDate) {
+        const fd = new Date(t.followUpDate);
+        if (fd >= now && fd <= endOfWeek) {
+          upcoming.push({ title: "Next (task)", notes: t.notes || "", taskName: t.name, date: t.followUpDate });
+        }
+      }
     }
+    // sort upcoming by soonest
+    upcoming.sort((a,b) => new Date(a.date || a.when) - new Date(b.date || b.when));
     return { todays, week, totalFollowUps, pending, completed, upcoming };
   }, [tasks, now, startOfToday, endOfWeek]);
 
@@ -75,18 +90,21 @@ const Dashboard = ({ tasks = [], onCardClick = () => {} }) => {
         {stats.upcoming.length === 0 ? (
           <p style={{ color: "#6b7280" }}>No upcoming follow-ups</p>
         ) : (
-          stats.upcoming.map((u, i) => (
-            <div key={i} style={{ padding: 10, background: "#fff", borderRadius: 10, marginTop: 8, display: "flex", justifyContent: "space-between" }}>
-              <div>
-                <div style={{ fontWeight: 700 }}>{u.title || "Follow-Up"}</div>
-                <div style={{ color: "#6b7280" }}>{u.taskName}</div>
+          stats.upcoming.map((u, i) => {
+            const dateStr = u.date || u.when || u.createdAt;
+            return (
+              <div key={i} style={{ padding: 10, background: "#fff", borderRadius: 10, marginTop: 8, display: "flex", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontWeight: 700 }}>{u.title || "Follow-Up"}</div>
+                  <div style={{ color: "#6b7280" }}>{u.taskName}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ color: "#ef4444", fontWeight: 700 }}>{fmtShort(dateStr)}</div>
+                  <div style={{ fontSize: 12, color: "#6b7280" }}>{u.status || "Pending"}</div>
+                </div>
               </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ color: "#ef4444", fontWeight: 700 }}>{fmtShort(u.date)}</div>
-                <div style={{ fontSize: 12, color: "#6b7280" }}>{u.status || "Pending"}</div>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
