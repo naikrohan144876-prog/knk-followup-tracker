@@ -1,5 +1,7 @@
+// src/components/TaskList.jsx
 import React, { useState, useMemo, useEffect } from "react";
 
+/* date formatter: DD/MM/YYYY, hh:mm AM/PM */
 const fmt = (iso) => {
   if (!iso) return "";
   const d = new Date(iso);
@@ -19,6 +21,13 @@ const isInRange = (iso, start, end) => {
   return d >= start && d < end;
 };
 
+/*
+ Props:
+  - tasks: array
+  - onOpenFollowUpModal(taskId)
+  - onDeleteTask(taskId)
+  - onDeleteFollowUp(taskId, identifier)
+*/
 const TaskList = ({ tasks = [], onOpenFollowUpModal, onDeleteTask, onDeleteFollowUp }) => {
   const [expandedId, setExpandedId] = useState(null);
   const [filter, setFilter] = useState("all");
@@ -36,15 +45,43 @@ const TaskList = ({ tasks = [], onOpenFollowUpModal, onDeleteTask, onDeleteFollo
   const endOfToday = new Date(startOfToday); endOfToday.setDate(endOfToday.getDate() + 1);
   const endOfWeek = new Date(startOfToday); endOfWeek.setDate(endOfWeek.getDate() + 7);
 
+  /* Helper: get most recent follow-up date for a task (by fu.date if available, else fu.createdAt) */
+  const getLatestFollowUpDate = (task) => {
+    const fus = task.followUps || [];
+    if (!fus.length) return task.followUpDate || null;
+    // compute most recent timestamp among fu.date (preferred) else createdAt
+    let latest = null;
+    for (const fu of fus) {
+      const cand = fu.date || fu.createdAt || null;
+      if (!cand) continue;
+      const candTime = new Date(cand).getTime();
+      if (!latest || candTime > latest) latest = candTime;
+    }
+    return latest ? new Date(latest).toISOString() : (task.followUpDate || null);
+  };
+
   const filteredSortedTasks = useMemo(() => {
-    const sorted = [...tasks].sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    // attach latestFollowUpDate to each task for sorting/filtering convenience
+    const enriched = tasks.map(t => {
+      const latest = getLatestFollowUpDate(t);
+      return { ...t, _latestFollowUpDate: latest };
+    });
+
+    const sorted = enriched.sort((a,b) => {
+      // most recent created first (if createdAt exists), else fallback to id
+      const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : a.id;
+      const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : b.id;
+      return bCreated - aCreated;
+    });
+
     if (filter === "all") return sorted;
 
     if (filter === "today") {
       return sorted.filter(t => {
         const createdToday = t.createdAt && isInRange(t.createdAt, startOfToday, endOfToday);
         const followToday = (t.followUps || []).some(fu => fu.date && isInRange(fu.date, startOfToday, endOfToday));
-        return createdToday || followToday;
+        const taskNext = t._latestFollowUpDate && isInRange(t._latestFollowUpDate, startOfToday, endOfToday);
+        return createdToday || followToday || taskNext;
       });
     }
 
@@ -52,12 +89,13 @@ const TaskList = ({ tasks = [], onOpenFollowUpModal, onDeleteTask, onDeleteFollo
       return sorted.filter(t => {
         const createdWeek = t.createdAt && (new Date(t.createdAt) >= startOfToday && new Date(t.createdAt) <= endOfWeek);
         const followWeek = (t.followUps || []).some(fu => fu.date && (new Date(fu.date) >= startOfToday && new Date(fu.date) <= endOfWeek));
-        return createdWeek || followWeek;
+        const taskNext = t._latestFollowUpDate && (new Date(t._latestFollowUpDate) >= startOfToday && new Date(t._latestFollowUpDate) <= endOfWeek);
+        return createdWeek || followWeek || taskNext;
       });
     }
 
     if (filter === "followups") {
-      return sorted.filter(t => (t.followUps || []).length > 0);
+      return sorted.filter(t => (t.followUps || []).length > 0 || !!t.followUpDate);
     }
 
     if (filter === "pending") {
@@ -83,7 +121,7 @@ const TaskList = ({ tasks = [], onOpenFollowUpModal, onDeleteTask, onDeleteFollo
     <div className="task-list-wrapper">
       <h2 className="task-header">My Tasks</h2>
 
-      <div style={{display:'flex', gap:8, marginBottom:12, justifyContent:'center'}}>
+      <div style={{display:'flex', gap:8, marginBottom:12, justifyContent:'center', flexWrap:'wrap'}}>
         <button className={`btn-small ${filter==='all' ? 'active' : ''}`} onClick={() => setFilter('all')}>All</button>
         <button className={`btn-small ${filter==='today' ? 'active' : ''}`} onClick={() => setFilter('today')}>Today</button>
         <button className={`btn-small ${filter==='week' ? 'active' : ''}`} onClick={() => setFilter('week')}>This Week</button>
@@ -96,17 +134,28 @@ const TaskList = ({ tasks = [], onOpenFollowUpModal, onDeleteTask, onDeleteFollo
         {filteredSortedTasks.length === 0 ? (
           <p className="no-tasks">No tasks yet. Tap + to add a task.</p>
         ) : filteredSortedTasks.map(task => {
-          const sortedFollowUps = (task.followUps || []).slice().sort((a,b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
-          const next = task.followUpDate || (sortedFollowUps[0] && sortedFollowUps[0].date) || null;
+          // sort follow-ups: most recent first by fu.date || fu.createdAt
+          const sortedFollowUps = (task.followUps || []).slice().sort((a,b) => {
+            const aTime = new Date(a.date || a.createdAt || 0).getTime();
+            const bTime = new Date(b.date || b.createdAt || 0).getTime();
+            return bTime - aTime;
+          });
+
+          // latest follow-up date: prefer follow-up dates, else task.followUpDate
+          const next = (sortedFollowUps[0] && (sortedFollowUps[0].date || sortedFollowUps[0].createdAt)) || task.followUpDate || null;
 
           return (
             <div className="task-item" key={task.id}>
               <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%"}}>
                 <div style={{flex:1}}>
                   <div className="task-title">{task.name}</div>
-                  <div className="task-dates">
+
+                  <div className="task-dates" style={{marginTop:6}}>
+                    {/* Created date (always task.createdAt) */}
                     <span className="time-created small">Created: {fmt(task.createdAt)}</span>
-                    {next && <span style={{marginLeft:10}} className="time-followup small">Next: {fmt(next)}</span>}
+
+                    {/* Latest follow-up date (most recently updated follow-up) */}
+                    {next && <span style={{marginLeft:12}} className="time-followup small">Last Follow-up: {fmt(next)}</span>}
                   </div>
                 </div>
 
@@ -148,6 +197,7 @@ const TaskList = ({ tasks = [], onOpenFollowUpModal, onDeleteTask, onDeleteFollo
                             </div>
 
                             <div style={{textAlign:"right"}}>
+                              {/* follow-up date (fu.date preferred, else createdAt) */}
                               <div className="time-followup">{fu.date ? fmt(fu.date) : (fu.createdAt ? fmt(fu.createdAt) : "")}</div>
                               <div style={{fontSize:12, color:"#6b7280"}}>{fu.status || "Pending"}</div>
                               <div style={{marginTop:6, display:'flex', gap:6, justifyContent:'flex-end'}}>
