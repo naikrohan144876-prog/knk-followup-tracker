@@ -11,6 +11,20 @@ import "./styles.css";
 const APP_VERSION = "1.0.0";
 const STORAGE_KEY = "knk_tasks_v4";
 
+const BottomNav = ({ active }) => {
+  // simple nav that works in SPA
+  const open = (path) => {
+    window.history.pushState({}, "", path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+  return (
+    <div className="bottom-nav">
+      <button className={active === "dashboard" ? "active" : ""} onClick={() => open("/dashboard")}>Dashboard</button>
+      <button className={active === "tasks" ? "active" : ""} onClick={() => open("/tasks")}>Tasks</button>
+    </div>
+  );
+};
+
 export default function App() {
   const [tasks, setTasks] = useState(() => {
     try {
@@ -30,14 +44,13 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // file input ref for import
   const importRef = useRef(null);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
   }, [tasks]);
 
-  // ---- CRUD handlers ----
+  // CRUD
   const handleAddTask = (newTask) => {
     const task = {
       id: Date.now(),
@@ -61,7 +74,6 @@ export default function App() {
     setShowAddFollowUp(true);
   };
 
-  // delete task + follow-up
   const deleteTask = (taskId) => {
     if (!window.confirm("Delete this task and all its follow-ups?")) return;
     setTasks(prev => prev.filter(t => t.id !== taskId));
@@ -83,7 +95,6 @@ export default function App() {
     );
   };
 
-  // delete project/department
   const deleteProject = (projectName) => {
     if (!window.confirm(`Delete project "${projectName}"? This will remove the project from existing tasks.`)) return;
     setProjects(prev => prev.filter(p => p !== projectName));
@@ -96,7 +107,7 @@ export default function App() {
     setTasks(prev => prev.map(t => (t.department === deptName ? { ...t, department: null } : t)));
   };
 
-  // ---- export / import ----
+  // export / import
   const exportData = () => {
     const payload = {
       version: APP_VERSION,
@@ -146,7 +157,6 @@ export default function App() {
     e.target.value = "";
   };
 
-  // navigation helper: set filter then navigate to /tasks
   const navigateWithFilter = (filter) => {
     localStorage.setItem("knk_filter", filter);
     window.history.pushState({}, "", "/tasks");
@@ -161,26 +171,19 @@ export default function App() {
 
           <Route path="/dashboard" element={
             <>
-              <Dashboard
-                tasks={tasks}
-                onCardClick={(filterType) => navigateWithFilter(filterType)}
-              />
+              <Dashboard tasks={tasks} onCardClick={(f) => navigateWithFilter(f)} />
+              <BottomNav active="dashboard" />
             </>
           } />
 
           <Route path="/tasks" element={
             <>
-              <TaskList
-                tasks={tasks}
-                onOpenFollowUpModal={openFollowUpModalFor}
-                onDeleteTask={deleteTask}
-                onDeleteFollowUp={deleteFollowUp}
-              />
+              <TaskList tasks={tasks} onOpenFollowUpModal={openFollowUpModalFor} onDeleteTask={deleteTask} onDeleteFollowUp={deleteFollowUp} />
+              <BottomNav active="tasks" />
             </>
           } />
         </Routes>
 
-        {/* Modals */}
         {showAddTask && (
           <AddTaskModal
             isOpen={showAddTask}
@@ -215,9 +218,14 @@ export default function App() {
           />
         )}
 
-        {/* top-right three-dot menu */}
-        <div style={{ position: 'fixed', top: 12, right: 12, zIndex: 1200, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button className="dot-menu" title="Menu" onClick={() => setMenuOpen(true)}>⋯</button>
+        {/* left-top animated menu icon */}
+        <div style={{ position: 'fixed', top: 12, left: 12, zIndex: 1400, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className="menu-icon" onClick={() => setMenuOpen(true)} aria-label="Open menu">
+            <span className={`bar bar1 ${menuOpen ? 'open' : ''}`} />
+            <span className={`bar bar2 ${menuOpen ? 'open' : ''}`} />
+            <span className={`bar bar3 ${menuOpen ? 'open' : ''}`} />
+          </button>
+
           <div style={{ padding: '6px 10px', background: '#fff', borderRadius: 10, border: '1px solid #eee', display: 'flex', alignItems: 'center', fontSize: 13 }}>
             v{APP_VERSION}
           </div>
@@ -234,7 +242,6 @@ export default function App() {
 
         <input ref={importRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={handleFileChosen} />
 
-        {/* Floating + button */}
         <button className="fab" onClick={() => setShowAddTask(true)}>+</button>
       </div>
     </Router>
