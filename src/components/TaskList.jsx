@@ -22,12 +22,12 @@ const isInRange = (iso, start, end) => {
 };
 
 /*
-Props expected:
- - tasks: array
- - onOpenFollowUpModal(taskId)
- - onDeleteTask(taskId)
- - onDeleteFollowUp(taskId, identifier)
- - onToggleTaskStatus(taskId)   <-- NEW: toggles Pending/Completed for a task
+ Props:
+  - tasks: array
+  - onOpenFollowUpModal(taskId)
+  - onDeleteTask(taskId)
+  - onDeleteFollowUp(taskId, identifier)
+  - onToggleTaskStatus(taskId)
 */
 const TaskList = ({ tasks = [], onOpenFollowUpModal, onDeleteTask, onDeleteFollowUp, onToggleTaskStatus }) => {
   const [expandedId, setExpandedId] = useState(null);
@@ -46,8 +46,29 @@ const TaskList = ({ tasks = [], onOpenFollowUpModal, onDeleteTask, onDeleteFollo
   const endOfToday = new Date(startOfToday); endOfToday.setDate(endOfToday.getDate() + 1);
   const endOfWeek = new Date(startOfToday); endOfWeek.setDate(endOfWeek.getDate() + 7);
 
-  /* Returns ISO of most recent followup (used earlier) - kept for expanded view sorting */
-  const getMostRecentFollowUp = (task) => {
+  /* Helper: find earliest upcoming follow-up date (>= now). Return ISO or null. 
+     If none upcoming, return null (we'll fallback to task.followUpDate when rendering if needed). */
+  const getNextUpcomingFollowUp = (task) => {
+    const fus = (task.followUps || [])
+      .filter(fu => fu.date)
+      .map(fu => ({ iso: fu.date, time: new Date(fu.date).getTime() }));
+
+    if (!fus.length) {
+      return null;
+    }
+
+    const nowTime = Date.now();
+    const upcoming = fus.filter(x => x.time >= nowTime);
+    if (upcoming.length) {
+      upcoming.sort((a,b) => a.time - b.time);
+      return new Date(upcoming[0].iso).toISOString();
+    }
+    // no future ones
+    return null;
+  };
+
+  /* Helper: get most recent follow-up (used for expanded list sorting) */
+  const getMostRecentFollowUpIso = (task) => {
     const fus = task.followUps || [];
     if (!fus.length) return null;
     let latest = null;
@@ -60,38 +81,17 @@ const TaskList = ({ tasks = [], onOpenFollowUpModal, onDeleteTask, onDeleteFollo
     return latest ? new Date(latest).toISOString() : null;
   };
 
-  /* NEW: compute the next upcoming follow-up date (earliest date >= now).
-     If none, fallback to task.followUpDate (could be in future or past). */
-  const getNextFollowUp = (task) => {
-    const fus = (task.followUps || []).filter(fu => fu.date).map(fu => ({ date: new Date(fu.date).getTime(), iso: fu.date }));
-    // also include task.followUpDate if provided
-    if (task.followUpDate) {
-      fus.push({ date: new Date(task.followUpDate).getTime(), iso: task.followUpDate });
-    }
-    if (!fus.length) return null;
-    // filter upcoming (>= now)
-    const nowTime = Date.now();
-    const upcoming = fus.filter(x => x.date >= nowTime);
-    if (upcoming.length) {
-      // earliest upcoming
-      upcoming.sort((a,b) => a.date - b.date);
-      return new Date(upcoming[0].iso).toISOString();
-    }
-    // if no future ones, return the soonest in the past (optional) — here we prefer null
-    return null;
-  };
-
   const filteredSortedTasks = useMemo(() => {
-    // attach convenience fields
+    // enrich with next & mostRecent keys (non-destructive)
     const enriched = tasks.map(t => {
       return {
         ...t,
-        _mostRecentFollowUp: getMostRecentFollowUp(t),
-        _nextFollowUpDate: getNextFollowUp(t),
+        _nextUpcoming: getNextUpcomingFollowUp(t),        // ISO or null
+        _mostRecentFollowUp: getMostRecentFollowUpIso(t), // ISO or null
       };
     });
 
-    // sort by createdAt desc (newest created first)
+    // primary sort: newest created first
     const sorted = enriched.sort((a,b) => {
       const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : a.id;
       const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : b.id;
@@ -104,8 +104,8 @@ const TaskList = ({ tasks = [], onOpenFollowUpModal, onDeleteTask, onDeleteFollo
       return sorted.filter(t => {
         const createdToday = t.createdAt && isInRange(t.createdAt, startOfToday, endOfToday);
         const followToday = (t.followUps || []).some(fu => fu.date && isInRange(fu.date, startOfToday, endOfToday));
-        const taskNext = t._nextFollowUpDate && isInRange(t._nextFollowUpDate, startOfToday, endOfToday);
-        return createdToday || followToday || taskNext;
+        const nextToday = t._nextUpcoming && isInRange(t._nextUpcoming, startOfToday, endOfToday);
+        return createdToday || followToday || nextToday;
       });
     }
 
@@ -113,8 +113,8 @@ const TaskList = ({ tasks = [], onOpenFollowUpModal, onDeleteTask, onDeleteFollo
       return sorted.filter(t => {
         const createdWeek = t.createdAt && (new Date(t.createdAt) >= startOfToday && new Date(t.createdAt) <= endOfWeek);
         const followWeek = (t.followUps || []).some(fu => fu.date && (new Date(fu.date) >= startOfToday && new Date(fu.date) <= endOfWeek));
-        const taskNext = t._nextFollowUpDate && (new Date(t._nextFollowUpDate) >= startOfToday && new Date(t._nextFollowUpDate) <= endOfWeek);
-        return createdWeek || followWeek || taskNext;
+        const nextWeek = t._nextUpcoming && (new Date(t._nextUpcoming) >= startOfToday && new Date(t._nextUpcoming) <= endOfWeek);
+        return createdWeek || followWeek || nextWeek;
       });
     }
 
@@ -158,26 +158,23 @@ const TaskList = ({ tasks = [], onOpenFollowUpModal, onDeleteTask, onDeleteFollo
         {filteredSortedTasks.length === 0 ? (
           <p className="no-tasks">No tasks yet. Tap + to add a task.</p>
         ) : filteredSortedTasks.map(task => {
-          // sort follow-ups newest first for expanded list
+          // follow-ups sorted newest-first for expanded view
           const sortedFollowUps = (task.followUps || []).slice().sort((a,b) => {
             const aTime = new Date(a.date || a.createdAt || 0).getTime();
             const bTime = new Date(b.date || b.createdAt || 0).getTime();
             return bTime - aTime;
           });
 
-          // next upcoming follow-up (computed earlier)
-          const next = task._nextFollowUpDate || null;
+          // Next upcoming follow-up (earliest future) OR fallback to task.followUpDate
+          const next = task._nextUpcoming || null;
 
           return (
             <div className="task-item" key={task.id}>
               <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%"}}>
                 <div style={{flex:1}}>
-                  <div style={{display:'flex', alignItems:'center', gap:10, justifyContent:'space-between'}}>
-                    <div style={{minWidth:0}}>
-                      <div className="task-title" style={{overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{task.name}</div>
-                    </div>
+                  <div className="task-title" style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:12}}>
+                    <div style={{minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{task.name}</div>
 
-                    {/* Status badge + toggle */}
                     <div style={{display:'flex', gap:8, alignItems:'center'}}>
                       <div className={`status-badge ${ (task.status || "Pending").toLowerCase() === 'completed' ? 'completed' : 'pending' }`}>
                         {(task.status || "Pending")}
@@ -193,12 +190,13 @@ const TaskList = ({ tasks = [], onOpenFollowUpModal, onDeleteTask, onDeleteFollo
                   </div>
 
                   <div className="task-dates" style={{marginTop:6}}>
-                    {/* Created date (always task.createdAt) */}
                     <span className="time-created small">Created: {fmt(task.createdAt)}</span>
 
-                    {/* Next follow-up date (earliest upcoming) */}
-                    {next ? <span style={{marginLeft:12}} className="time-followup small">Next: {fmt(next)}</span>
-                          : (task.followUpDate ? <span style={{marginLeft:12}} className="time-followup small">Next: {fmt(task.followUpDate)}</span> : null)}
+                    {next ? (
+                      <span style={{marginLeft:12}} className="time-followup small">Next: {fmt(next)}</span>
+                    ) : task.followUpDate ? (
+                      <span style={{marginLeft:12}} className="time-followup small">Next: {fmt(task.followUpDate)}</span>
+                    ) : null}
                   </div>
                 </div>
 
@@ -240,7 +238,6 @@ const TaskList = ({ tasks = [], onOpenFollowUpModal, onDeleteTask, onDeleteFollo
                             </div>
 
                             <div style={{textAlign:"right"}}>
-                              {/* follow-up date (fu.date preferred, else createdAt) */}
                               <div className="time-followup">{fu.date ? fmt(fu.date) : (fu.createdAt ? fmt(fu.createdAt) : "")}</div>
                               <div style={{fontSize:12, color:"#6b7280"}}>{fu.status || "Pending"}</div>
                               <div style={{marginTop:6, display:'flex', gap:6, justifyContent:'flex-end'}}>
