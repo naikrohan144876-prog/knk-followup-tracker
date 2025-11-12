@@ -1,25 +1,15 @@
-// src/App.jsx
 import React, { useState, useEffect, useRef } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import TaskList from "./components/TaskList";
 import Dashboard from "./components/Dashboard";
 import AddTaskModal from "./components/AddTaskModal";
 import AddFollowUpModal from "./components/AddFollowUpModal";
 import SettingsModal from "./components/SettingsModal";
+import MenuModal from "./components/MenuModal";
 import "./styles.css";
 
-const APP_VERSION = "1.0.0";   // update this before sending to friends
+const APP_VERSION = "1.0.0";
 const STORAGE_KEY = "knk_tasks_v4";
-
-const BottomNav = ({ active }) => {
-  const navigate = useNavigate();
-  return (
-    <div className="bottom-nav">
-      <button className={active === "dashboard" ? "active" : ""} onClick={() => navigate("/dashboard")}>Dashboard</button>
-      <button className={active === "tasks" ? "active" : ""} onClick={() => navigate("/tasks")}>Tasks</button>
-    </div>
-  );
-};
 
 export default function App() {
   const [tasks, setTasks] = useState(() => {
@@ -38,6 +28,7 @@ export default function App() {
   const [showAddFollowUp, setShowAddFollowUp] = useState(false);
   const [followUpTargetTaskId, setFollowUpTargetTaskId] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // file input ref for import
   const importRef = useRef(null);
@@ -46,8 +37,7 @@ export default function App() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
   }, [tasks]);
 
-  // --- CRUD handlers ---
-
+  // ---- CRUD handlers ----
   const handleAddTask = (newTask) => {
     const task = {
       id: Date.now(),
@@ -71,20 +61,18 @@ export default function App() {
     setShowAddFollowUp(true);
   };
 
-  // Delete a task entirely (confirmation)
+  // delete task + follow-up
   const deleteTask = (taskId) => {
     if (!window.confirm("Delete this task and all its follow-ups?")) return;
     setTasks(prev => prev.filter(t => t.id !== taskId));
   };
 
-  // Delete a follow-up inside a task
   const deleteFollowUp = (taskId, followUpCreatedAtOrIndex) => {
     if (!window.confirm("Delete this follow-up?")) return;
     setTasks(prev =>
       prev.map(t => {
         if (t.id !== taskId) return t;
         const newFus = t.followUps.filter((fu, idx) => {
-          // match by createdAt if present else by index
           if (fu.createdAt && typeof followUpCreatedAtOrIndex === "string") {
             return fu.createdAt !== followUpCreatedAtOrIndex;
           }
@@ -95,22 +83,20 @@ export default function App() {
     );
   };
 
-  // Delete project (and clear project field from tasks)
+  // delete project/department
   const deleteProject = (projectName) => {
     if (!window.confirm(`Delete project "${projectName}"? This will remove the project from existing tasks.`)) return;
     setProjects(prev => prev.filter(p => p !== projectName));
     setTasks(prev => prev.map(t => (t.project === projectName ? { ...t, project: null } : t)));
   };
 
-  // Delete department similarly
   const deleteDepartment = (deptName) => {
     if (!window.confirm(`Delete department "${deptName}"? This will remove the department from existing tasks.`)) return;
     setDepartments(prev => prev.filter(d => d !== deptName));
     setTasks(prev => prev.map(t => (t.department === deptName ? { ...t, department: null } : t)));
   };
 
-  // --- Export & Import ---
-
+  // ---- export / import ----
   const exportData = () => {
     const payload = {
       version: APP_VERSION,
@@ -137,11 +123,6 @@ export default function App() {
     reader.onload = (e) => {
       try {
         const data = JSON.parse(e.target.result);
-        // Basic validation
-        if (!data || typeof data !== "object") throw new Error("Invalid file");
-        if (!Array.isArray(data.tasks) || !Array.isArray(data.projects) || !Array.isArray(data.departments)) {
-          if (!window.confirm("Import file doesn't look like expected structure. Continue anyway?")) return;
-        }
         if (!window.confirm("Importing will replace current tasks, projects and departments. Continue?")) return;
         setProjects(Array.isArray(data.projects) ? data.projects : []);
         setDepartments(Array.isArray(data.departments) ? data.departments : []);
@@ -162,7 +143,14 @@ export default function App() {
   const handleFileChosen = (e) => {
     const f = e.target.files && e.target.files[0];
     if (f) onImportFile(f);
-    e.target.value = ""; // reset
+    e.target.value = "";
+  };
+
+  // navigation helper: set filter then navigate to /tasks
+  const navigateWithFilter = (filter) => {
+    localStorage.setItem("knk_filter", filter);
+    window.history.pushState({}, "", "/tasks");
+    window.dispatchEvent(new PopStateEvent('popstate'));
   };
 
   return (
@@ -173,10 +161,12 @@ export default function App() {
 
           <Route path="/dashboard" element={
             <>
-              <Dashboard tasks={tasks} />
-              <BottomNav active="dashboard" />
+              <Dashboard
+                tasks={tasks}
+                onCardClick={(filterType) => navigateWithFilter(filterType)}
+              />
             </>
-          }/>
+          } />
 
           <Route path="/tasks" element={
             <>
@@ -186,12 +176,11 @@ export default function App() {
                 onDeleteTask={deleteTask}
                 onDeleteFollowUp={deleteFollowUp}
               />
-              <BottomNav active="tasks" />
             </>
-          }/>
+          } />
         </Routes>
 
-        {/* Add Task modal */}
+        {/* Modals */}
         {showAddTask && (
           <AddTaskModal
             isOpen={showAddTask}
@@ -204,7 +193,6 @@ export default function App() {
           />
         )}
 
-        {/* Add Follow-Up modal */}
         {showAddFollowUp && (
           <AddFollowUpModal
             isOpen={showAddFollowUp}
@@ -215,7 +203,6 @@ export default function App() {
           />
         )}
 
-        {/* Settings modal */}
         {showSettings && (
           <SettingsModal
             projects={projects}
@@ -228,17 +215,26 @@ export default function App() {
           />
         )}
 
-        {/* floating + and small top right toolbar for import/export/settings */}
-        <div style={{position:'fixed', top:12, right:12, zIndex:1200, display:'flex', gap:8}}>
-          <button className="btn-small" onClick={exportData} title="Export all data">Export</button>
-          <button className="btn-small" onClick={triggerImport} title="Import JSON backup">Import</button>
-          <input ref={importRef} type="file" accept=".json,application/json" style={{display:'none'}} onChange={handleFileChosen} />
-          <button className="btn-small" onClick={() => setShowSettings(true)} title="Manage projects & departments">Settings</button>
-          <div style={{padding:'8px 10px', background:'#fff', borderRadius:10, border:'1px solid #eee', display:'flex', alignItems:'center', fontSize:13}}>
+        {/* top-right three-dot menu */}
+        <div style={{ position: 'fixed', top: 12, right: 12, zIndex: 1200, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className="dot-menu" title="Menu" onClick={() => setMenuOpen(true)}>⋯</button>
+          <div style={{ padding: '6px 10px', background: '#fff', borderRadius: 10, border: '1px solid #eee', display: 'flex', alignItems: 'center', fontSize: 13 }}>
             v{APP_VERSION}
           </div>
         </div>
 
+        <MenuModal
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          onExport={exportData}
+          onImportClick={triggerImport}
+          onOpenSettings={() => setShowSettings(true)}
+          version={APP_VERSION}
+        />
+
+        <input ref={importRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={handleFileChosen} />
+
+        {/* Floating + button */}
         <button className="fab" onClick={() => setShowAddTask(true)}>+</button>
       </div>
     </Router>
