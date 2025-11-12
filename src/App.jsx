@@ -1,5 +1,6 @@
+// src/App.jsx
 import React, { useState, useEffect, useRef } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import TaskList from "./components/TaskList";
 import Dashboard from "./components/Dashboard";
 import AddTaskModal from "./components/AddTaskModal";
@@ -10,6 +11,32 @@ import "./styles.css";
 
 const APP_VERSION = "1.0.0";
 const STORAGE_KEY = "knk_tasks_v4";
+
+/* BottomNav as standalone component so it shows on every page */
+const BottomNav = ({ active }) => {
+  const navigate = (path) => {
+    window.history.pushState({}, "", path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+
+  return (
+    <div className="bottom-nav">
+      <button className={active === "dashboard" ? "active" : ""} onClick={() => navigate("/dashboard")}>Dashboard</button>
+      <button className={active === "tasks" ? "active" : ""} onClick={() => navigate("/tasks")}>Tasks</button>
+    </div>
+  );
+};
+
+/* Small Hook to expose current route for active nav */
+function useRoute() {
+  const [route, setRoute] = useState(window.location.pathname || "/dashboard");
+  useEffect(() => {
+    const onPop = () => setRoute(window.location.pathname || "/dashboard");
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  return route;
+}
 
 export default function App() {
   const [tasks, setTasks] = useState(() => {
@@ -30,9 +57,9 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // file input ref for import
   const importRef = useRef(null);
 
+  // keep localStorage in sync
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
   }, [tasks]);
@@ -43,6 +70,7 @@ export default function App() {
       id: Date.now(),
       ...newTask,
       createdAt: new Date().toISOString(),
+      status: newTask.status || "Pending",
       followUps: [],
     };
     setTasks(prev => [task, ...prev]);
@@ -61,7 +89,6 @@ export default function App() {
     setShowAddFollowUp(true);
   };
 
-  // delete task + follow-up
   const deleteTask = (taskId) => {
     if (!window.confirm("Delete this task and all its follow-ups?")) return;
     setTasks(prev => prev.filter(t => t.id !== taskId));
@@ -83,12 +110,11 @@ export default function App() {
     );
   };
 
-  // toggle task status
+  // toggle status handler (Pending <-> Completed)
   const toggleTaskStatus = (taskId) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: t.status === "Completed" ? "Pending" : "Completed" } : t));
   };
 
-  // delete project/department
   const deleteProject = (projectName) => {
     if (!window.confirm(`Delete project "${projectName}"? This will remove the project from existing tasks.`)) return;
     setProjects(prev => prev.filter(p => p !== projectName));
@@ -158,6 +184,10 @@ export default function App() {
     window.dispatchEvent(new PopStateEvent('popstate'));
   };
 
+  /* determine current route for active bottom nav button */
+  const route = useRoute();
+  const active = route.startsWith("/tasks") ? "tasks" : "dashboard";
+
   return (
     <Router>
       <div className="app-container">
@@ -170,6 +200,7 @@ export default function App() {
                 tasks={tasks}
                 onCardClick={(filterType) => navigateWithFilter(filterType)}
               />
+              <BottomNav active="dashboard" />
             </>
           } />
 
@@ -182,6 +213,7 @@ export default function App() {
                 onDeleteFollowUp={deleteFollowUp}
                 onToggleTaskStatus={toggleTaskStatus}
               />
+              <BottomNav active="tasks" />
             </>
           } />
         </Routes>
@@ -245,4 +277,15 @@ export default function App() {
       </div>
     </Router>
   );
+}
+
+/* small hook placed at bottom so file is single self-contained */
+function useRoute() {
+  const [route, setRoute] = useState(window.location.pathname || "/dashboard");
+  useEffect(() => {
+    const onPop = () => setRoute(window.location.pathname || "/dashboard");
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  return route;
 }
