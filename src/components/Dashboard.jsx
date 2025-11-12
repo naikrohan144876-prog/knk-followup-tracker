@@ -1,7 +1,7 @@
 // src/components/Dashboard.jsx
 import React, { useMemo } from "react";
 
-/* format DD/MM/YYYY, hh:mm AM/PM */
+/* date formatter DD/MM/YYYY, hh:mm AM/PM */
 const fmtShort = (iso) => {
   if (!iso) return "";
   const d = new Date(iso);
@@ -15,7 +15,7 @@ const fmtShort = (iso) => {
   return `${day}/${month}/${year}, ${hour12}:${minutes} ${ampm}`;
 };
 
-export default function Dashboard({ tasks = [], onCardClick = () => {}, onOpenSettings }) {
+export default function Dashboard({ tasks = [], onCardClick = () => {} }) {
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const endOfToday = new Date(startOfToday);
@@ -43,78 +43,78 @@ export default function Dashboard({ tasks = [], onCardClick = () => {}, onOpenSe
         const dateStr = f.date;
         if (dateStr) {
           const fd = new Date(dateStr);
-          // add only upcoming within 7 days
           if (fd >= now && fd <= endOfWeek) {
-            upcoming.push({ ...f, taskName: t.name, when: dateStr });
+            upcoming.push({ ...f, taskName: t.name || "", when: dateStr });
           }
         }
       }
 
-      // include task.followUpDate as a follow-up candidate as well
       if (t.followUpDate) {
         const fd = new Date(t.followUpDate);
-        totalFollowUps += 0; // already counted in fus if duplicated
         if (fd >= now && fd <= endOfWeek) {
-          upcoming.push({ title: "Next (task)", notes: t.notes || "", taskName: t.name, when: t.followUpDate });
+          upcoming.push({ title: "Next (task)", notes: t.notes || "", taskName: t.name || "", when: t.followUpDate });
         }
       }
     }
 
     upcoming.sort((a,b) => new Date(a.when) - new Date(b.when));
-
     return { todays, week, totalFollowUps, pending, completed, upcoming };
   }, [tasks, now, startOfToday, endOfWeek]);
 
   return (
-    <div className="dashboard" role="main">
-      <header className="dashboard-header">
-        <div className="header-left">
-          {/* left menu placeholder (App.jsx will render MenuModal and manage open state);
-              this is a visual placeholder in the header */}
-          <div className="menu-left-placeholder" />
+    <div className="dashboard-screen">
+      <div className="search-wrap">
+        <input className="search-input" placeholder="Search by name / project / department" />
+      </div>
+
+      <div className="stats-grid">
+        <div className="stat-card" onClick={() => onCardClick("today")}>
+          <div className="stat-title">Today's Tasks</div>
+          <div className="stat-value">{stats.todays}</div>
         </div>
 
-        <h1 className="dashboard-title">Dashboard</h1>
-
-        <div className="header-right">
-          <button className="header-version" title="App version">v1.0.0</button>
-          <button className="header-more" aria-hidden>⋯</button>
-        </div>
-      </header>
-
-      <div className="dashboard-cards" role="region" aria-label="stats">
-        <div className="card clickable" onClick={() => onCardClick("today")}>
-          <div className="card-title">Today's tasks</div>
-          <div className="card-value">{stats.todays}</div>
+        <div className="stat-card" onClick={() => onCardClick("pending")}>
+          <div className="stat-title">Pending Tasks</div>
+          <div className="stat-value">{stats.pending}</div>
         </div>
 
-        <div className="card clickable" onClick={() => onCardClick("week")}>
-          <div className="card-title">Tasks this week</div>
-          <div className="card-value">{stats.week}</div>
+        <div className="stat-card" onClick={() => onCardClick("completed")}>
+          <div className="stat-title">Completed</div>
+          <div className="stat-value">{stats.completed}</div>
         </div>
 
-        <div className="card clickable" onClick={() => onCardClick("followups")}>
-          <div className="card-title">Total follow-ups</div>
-          <div className="card-value">{stats.totalFollowUps}</div>
-        </div>
-
-        <div className="card clickable" onClick={() => onCardClick("pending")}>
-          <div className="card-title">Pending / Completed</div>
-          <div className="card-value">{stats.pending}/{stats.completed}</div>
+        <div className="stat-card" onClick={() => onCardClick("overdue")}>
+          <div className="stat-title">Overdue</div>
+          <div className="stat-value">
+            {/* Overdue count: follow-ups with date < now and status still pending */}
+            { (tasks || []).reduce((acc, t) => {
+                const fus = t.followUps || [];
+                const overdue = fus.filter(fu => fu.date && new Date(fu.date) < new Date() && (fu.status||"Pending")==="Pending").length;
+                return acc + overdue;
+              }, 0)
+            }
+          </div>
         </div>
       </div>
 
-      <section className="upcoming" aria-labelledby="upcoming-title">
-        <h2 id="upcoming-title" className="upcoming-title">Upcoming (7 days)</h2>
+      <div className="filters-row">
+        <select className="filter-select"><option>All Projects</option></select>
+        <select className="filter-select"><option>All Departments</option></select>
+        <select className="filter-select"><option>All Statuses</option></select>
+        <div style={{flex:1}}></div>
+      </div>
+
+      <section className="upcoming-section">
+        <h3 className="upcoming-heading">Upcoming (7 days)</h3>
 
         {stats.upcoming.length === 0 ? (
-          <div className="no-upcoming">No upcoming follow-ups</div>
+          <div className="no-upcoming small">No upcoming follow-ups</div>
         ) : (
           <div className="upcoming-list">
-            {stats.upcoming.map((u, idx) => (
-              <div className="upcoming-row" key={idx}>
+            {stats.upcoming.map((u, i) => (
+              <div className="upcoming-row" key={i}>
                 <div className="upcoming-left">
-                  <div className="upcoming-task">{u.taskName}</div>
+                  <div className="upcoming-task">{u.taskName || u.title || "Untitled"}</div>
                   <div className="upcoming-note">{u.title ? u.title : (u.notes || "")}</div>
                 </div>
                 <div className="upcoming-right">
@@ -126,6 +126,7 @@ export default function Dashboard({ tasks = [], onCardClick = () => {}, onOpenSe
           </div>
         )}
       </section>
+
     </div>
   );
 }
