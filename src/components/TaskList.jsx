@@ -1,27 +1,101 @@
-// src/components/TaskList.jsx
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 
 const fmt = (iso) => {
   if (!iso) return "";
   const d = new Date(iso);
-  return d.toLocaleString("en-IN", {
-    day: "2-digit", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit"
-  });
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  const hours = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const hour12 = hours % 12 || 12;
+  return `${day}/${month}/${year}, ${hour12}:${minutes} ${ampm}`;
+};
+
+const isInRange = (iso, start, end) => {
+  if (!iso) return false;
+  const d = new Date(iso);
+  return d >= start && d < end;
 };
 
 const TaskList = ({ tasks = [], onOpenFollowUpModal, onDeleteTask, onDeleteFollowUp }) => {
   const [expandedId, setExpandedId] = useState(null);
-  const sortedTasks = useMemo(() => [...tasks].sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0)), [tasks]);
+  const [filter, setFilter] = useState("all");
+
+  useEffect(() => {
+    const f = localStorage.getItem("knk_filter");
+    if (f) {
+      setFilter(f);
+      localStorage.removeItem("knk_filter");
+    }
+  }, []);
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const endOfToday = new Date(startOfToday); endOfToday.setDate(endOfToday.getDate() + 1);
+  const endOfWeek = new Date(startOfToday); endOfWeek.setDate(endOfWeek.getDate() + 7);
+
+  const filteredSortedTasks = useMemo(() => {
+    const sorted = [...tasks].sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    if (filter === "all") return sorted;
+
+    if (filter === "today") {
+      return sorted.filter(t => {
+        const createdToday = t.createdAt && isInRange(t.createdAt, startOfToday, endOfToday);
+        const followToday = (t.followUps || []).some(fu => fu.date && isInRange(fu.date, startOfToday, endOfToday));
+        return createdToday || followToday;
+      });
+    }
+
+    if (filter === "week") {
+      return sorted.filter(t => {
+        const createdWeek = t.createdAt && (new Date(t.createdAt) >= startOfToday && new Date(t.createdAt) <= endOfWeek);
+        const followWeek = (t.followUps || []).some(fu => fu.date && (new Date(fu.date) >= startOfToday && new Date(fu.date) <= endOfWeek));
+        return createdWeek || followWeek;
+      });
+    }
+
+    if (filter === "followups") {
+      return sorted.filter(t => (t.followUps || []).length > 0);
+    }
+
+    if (filter === "pending") {
+      return sorted.filter(t => {
+        if ((t.followUps || []).some(fu => (fu.status || "Pending") === "Pending")) return true;
+        if ((t.status || "Pending") === "Pending") return true;
+        return false;
+      });
+    }
+
+    if (filter === "completed") {
+      return sorted.filter(t => {
+        if ((t.followUps || []).some(fu => (fu.status || "Pending") === "Completed")) return true;
+        if ((t.status || "Pending") === "Completed") return true;
+        return false;
+      });
+    }
+
+    return sorted;
+  }, [tasks, filter, startOfToday, endOfToday, endOfWeek]);
 
   return (
     <div className="task-list-wrapper">
       <h2 className="task-header">My Tasks</h2>
 
+      <div style={{display:'flex', gap:8, marginBottom:12, justifyContent:'center'}}>
+        <button className={`btn-small ${filter==='all' ? 'active' : ''}`} onClick={() => setFilter('all')}>All</button>
+        <button className={`btn-small ${filter==='today' ? 'active' : ''}`} onClick={() => setFilter('today')}>Today</button>
+        <button className={`btn-small ${filter==='week' ? 'active' : ''}`} onClick={() => setFilter('week')}>This Week</button>
+        <button className={`btn-small ${filter==='followups' ? 'active' : ''}`} onClick={() => setFilter('followups')}>With Follow-ups</button>
+        <button className={`btn-small ${filter==='pending' ? 'active' : ''}`} onClick={() => setFilter('pending')}>Pending</button>
+        <button className={`btn-small ${filter==='completed' ? 'active' : ''}`} onClick={() => setFilter('completed')}>Completed</button>
+      </div>
+
       <div className="task-list">
-        {sortedTasks.length === 0 ? (
+        {filteredSortedTasks.length === 0 ? (
           <p className="no-tasks">No tasks yet. Tap + to add a task.</p>
-        ) : sortedTasks.map(task => {
+        ) : filteredSortedTasks.map(task => {
           const sortedFollowUps = (task.followUps || []).slice().sort((a,b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
           const next = task.followUpDate || (sortedFollowUps[0] && sortedFollowUps[0].date) || null;
 
@@ -31,8 +105,8 @@ const TaskList = ({ tasks = [], onOpenFollowUpModal, onDeleteTask, onDeleteFollo
                 <div style={{flex:1}}>
                   <div className="task-title">{task.name}</div>
                   <div className="task-dates">
-                    <span className="time-created">Created: {fmt(task.createdAt)}</span>
-                    {next && <span style={{marginLeft:10}} className="time-followup">Next: {fmt(next)}</span>}
+                    <span className="time-created small">Created: {fmt(task.createdAt)}</span>
+                    {next && <span style={{marginLeft:10}} className="time-followup small">Next: {fmt(next)}</span>}
                   </div>
                 </div>
 
