@@ -34,10 +34,12 @@ export default function App() {
   const importRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState("");
 
+  // persist tasks
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
   }, [tasks]);
 
+  // Add a new task
   const addTask = (payload) => {
     const t = {
       id: Date.now(),
@@ -50,6 +52,7 @@ export default function App() {
     setShowAddTask(false);
   };
 
+  // Add follow-up to a task
   const addFollowUp = (taskId, fu) => {
     const fuFull = { ...fu, createdAt: new Date().toISOString() };
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, followUps: [...(t.followUps||[]), fuFull] } : t));
@@ -57,22 +60,25 @@ export default function App() {
     setFollowUpTarget(null);
   };
 
+  // Delete a task
   const deleteTask = (taskId) => {
     if (!window.confirm("Delete this task and all follow-ups?")) return;
     setTasks(prev => prev.filter(t => t.id !== taskId));
     if (detailTaskId === taskId) setDetailTaskId(null);
   };
 
+  // Delete a follow-up (identified by createdAt)
   const deleteFollowUp = (taskId, createdAt) => {
     if (!window.confirm("Delete this follow-up?")) return;
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, followUps: (t.followUps||[]).filter(fu => fu.createdAt !== createdAt) } : t));
   };
 
+  // Update task status (Pending / Completed)
   const toggleTaskStatus = (taskId, status) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t));
   };
 
-  // export / import
+  // Export data
   const exportData = () => {
     const payload = { exportedAt: new Date().toISOString(), tasks, projects, departments };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -84,6 +90,7 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  // Import file
   const onImportFile = (file) => {
     if (!file) return;
     const reader = new FileReader();
@@ -101,10 +108,16 @@ export default function App() {
     };
     reader.readAsText(file);
   };
-
   const triggerImport = () => importRef.current?.click();
 
-  // header title dynamic based on path (simple)
+  // Navigation helper for dashboard cards => sets local filter then navigates to /tasks
+  const navigateWithFilter = (filterType) => {
+    localStorage.setItem("knk_filter", filterType);
+    window.history.pushState({}, "", "/tasks");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
+  // simple route tracker for header title and bottom nav active state
   const [path, setPath] = useState(window.location.pathname);
   useEffect(() => {
     const onPop = () => setPath(window.location.pathname);
@@ -128,7 +141,7 @@ export default function App() {
         <div className="search-container">
           <input
             className="search-input"
-            placeholder="Search by name / project / department"
+            placeholder="Search by name / project / department / notes"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -136,12 +149,14 @@ export default function App() {
 
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
           <Route path="/dashboard" element={
             <Dashboard
               tasks={tasks}
-              onCardClick={(filter) => { localStorage.setItem("knk_filter", filter); window.history.pushState({}, "", "/tasks"); window.dispatchEvent(new PopStateEvent('popstate')); }}
+              onCardClick={(filter) => navigateWithFilter(filter)}
             />
           } />
+
           <Route path="/tasks" element={
             <TaskList
               tasks={tasks}
@@ -152,30 +167,68 @@ export default function App() {
           } />
         </Routes>
 
-        {/* Bottom nav simplified */}
-        <div className="bottom-nav">
+        {/* Bottom nav */}
+        <div className="bottom-nav" style={{ zIndex: 90 }}>
           <button className={path.includes("/dashboard") ? "active" : ""} onClick={() => { window.history.pushState({}, "", "/dashboard"); window.dispatchEvent(new PopStateEvent('popstate')); }}>Dashboard</button>
           <button className={path.includes("/tasks") ? "active" : ""} onClick={() => { window.history.pushState({}, "", "/tasks"); window.dispatchEvent(new PopStateEvent('popstate')); }}>Tasks</button>
         </div>
 
-        {/* Large Add button */}
-        <button className="fab-add" onClick={() => setShowAddTask(true)}><span style={{fontSize:20,fontWeight:900}}>+</span> Add</button>
+        {/* Large Add button (lifted so it doesn't overlap bottom nav) */}
+        <button className="fab-add" onClick={() => setShowAddTask(true)}>
+          <span style={{ fontSize: 20, fontWeight: 900 }}>+</span> Add
+        </button>
 
         {/* Modals */}
-        {showAddTask && <AddTaskModal onClose={() => setShowAddTask(false)} onSave={addTask} projects={projects} departments={departments} setProjects={setProjects} setDepartments={setDepartments} />}
-        {showAddFollowUp && followUpTarget && <AddFollowUpModal onClose={() => { setShowAddFollowUp(false); setFollowUpTarget(null); }} onSave={(fu) => addFollowUp(followUpTarget, fu)} presetTaskId={followUpTarget} tasks={tasks} />}
+        {showAddTask && (
+          <AddTaskModal
+            onClose={() => setShowAddTask(false)}
+            onSave={addTask}
+            projects={projects}
+            departments={departments}
+            setProjects={setProjects}
+            setDepartments={setDepartments}
+          />
+        )}
 
-        {detailTaskId && <TaskDetail
-          task={tasks.find(t => t.id === detailTaskId)}
-          onClose={() => setDetailTaskId(null)}
-          onDelete={(id) => { deleteTask(id); }}
-          onDeleteFollowUp={deleteFollowUp}
-          onUpdateStatus={(id, status) => toggleTaskStatus(id, status)}
-        />}
+        {showAddFollowUp && followUpTarget && (
+          <AddFollowUpModal
+            onClose={() => { setShowAddFollowUp(false); setFollowUpTarget(null); }}
+            onSave={(fu) => addFollowUp(followUpTarget, fu)}
+            presetTaskId={followUpTarget}
+            tasks={tasks}
+          />
+        )}
+
+        {detailTaskId && (
+          <TaskDetail
+            task={tasks.find(t => t.id === detailTaskId)}
+            onClose={() => setDetailTaskId(null)}
+            onDelete={(id) => { deleteTask(id); }}
+            onDeleteFollowUp={deleteFollowUp}
+            onUpdateStatus={(id, status) => toggleTaskStatus(id, status)}
+          />
+        )}
 
         {/* Menu modal */}
-        <MenuModal open={menuOpen} onClose={() => setMenuOpen(false)} onExport={exportData} onImportClick={triggerImport} onOpenSettings={() => alert("Open settings")} />
-        <input ref={importRef} type="file" accept=".json,application/json" style={{display:'none'}} onChange={(e)=> { const f = e.target.files && e.target.files[0]; if (f) onImportFile(f); e.target.value=''; }} />
+        <MenuModal
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          onExport={exportData}
+          onImportClick={triggerImport}
+          onOpenSettings={() => alert("Open settings")}
+        />
+
+        <input
+          ref={importRef}
+          type="file"
+          accept=".json,application/json"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const f = e.target.files && e.target.files[0];
+            if (f) onImportFile(f);
+            e.target.value = "";
+          }}
+        />
       </div>
     </Router>
   );
