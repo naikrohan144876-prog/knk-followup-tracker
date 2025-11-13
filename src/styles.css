@@ -552,5 +552,52 @@ body{
   .follow-right { min-width: 108px; }
   .followups-list { max-height: 40vh; }
 }
+/* ---------- Add Follow-Up modal refined (classy, consistent) ---------- */
+.addfollow-modal {
+  width: min(900px, 96%);
+  max-width: 680px;
+  border-radius: 16px;
+  padding: 20px 22px;
+  box-shadow: 0 28px 70px rgba(14,42,80,0.18);
+  background: #fff;
+  position: relative;
+}
+
+/* reuse .modal-close and .modal-title styles previously added */
+
+/* align selected task summary */
+.selected-task-summary {
+  margin-top: 8px;
+  color: #374151;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* form rows */
+.addfollow-modal .form-row { margin-bottom: 12px; }
+.addfollow-modal .form-label { display:block; font-weight:700; margin-bottom:6px; color:#374151; font-size:13px; }
+.addfollow-modal .form-input, .addfollow-modal .form-select, .addfollow-modal .form-textarea {
+  width:100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(14,42,80,0.06);
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(14,42,80,0.03);
+  font-size: 15px;
+  color: #071029;
+}
+.addfollow-modal .form-textarea { min-height: 86px; resize: vertical; }
+
+/* two column layout */
+.addfollow-modal .two-col { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width:560px) { .addfollow-modal .two-col { grid-template-columns: 1fr; } }
+
+/* actions */
+.addfollow-modal .modal-actions { display:flex; gap:12px; justify-content:flex-end; margin-top: 14px; }
+.addfollow-modal .btn-primary { background: linear-gradient(180deg,#2f80ed,#1e63d9); color:#fff; border:none; padding:10px 16px; border-radius:12px; font-weight:800; cursor:pointer; box-shadow:0 12px 28px rgba(30,136,229,0.18); }
+.addfollow-modal .btn-cancel { background:#fff; border:1px solid rgba(0,0,0,0.06); padding:10px 14px; border-radius:12px; cursor:pointer; }
+
+/* ensure modal fits viewport */
+.addfollow-modal, .modal-container { max-height: calc(100vh - 160px) !important; overflow-y: auto !important; margin: 28px auto !important; padding-bottom: 22px !important; }
 
 
