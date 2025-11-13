@@ -1,80 +1,108 @@
 // src/components/TaskDetail.jsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 
-/* date fmt dd/mm/yyyy hh:mm AM/PM */
+/* date format helper dd/mm/yyyy, h:mm AM/PM */
 const fmt = (iso) => {
-  if (!iso) return "";
+  if (!iso) return "-";
   const d = new Date(iso);
-  const day = String(d.getDate()).padStart(2,'0');
-  const mon = String(d.getMonth()+1).padStart(2,'0');
+  if (isNaN(d.getTime())) return "-";
+  const day = String(d.getDate()).padStart(2, "0");
+  const mon = String(d.getMonth() + 1).padStart(2, "0");
   const yr = d.getFullYear();
-  const hh = d.getHours() % 12 || 12;
-  const mm = String(d.getMinutes()).padStart(2,'0');
-  const am = d.getHours() >= 12 ? 'PM' : 'AM';
-  return `${day}/${mon}/${yr}, ${hh}:${mm} ${am}`;
+  const hours = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  const hour12 = hours % 12 || 12;
+  return `${day}/${mon}/${yr}, ${hour12}:${minutes} ${ampm}`;
 };
 
-export default function TaskDetail({ task, onClose = () => {}, onDelete = () => {}, onDeleteFollowUp = () => {}, onUpdateStatus = () => {} }) {
-  const [status, setStatus] = useState(task?.status || 'Pending');
+/* returns next upcoming follow-up ISO or null */
+const nextUpcoming = (task) => {
+  if (!task) return null;
+  const now = Date.now();
+  const arr = (task.followUps || [])
+    .filter(fu => fu.date)
+    .map(fu => ({ iso: fu.date, time: new Date(fu.date).getTime() }));
+  if (task.followUpDate) arr.push({ iso: task.followUpDate, time: new Date(task.followUpDate).getTime() });
+  const future = arr.filter(a => a.time >= now);
+  if (!future.length) return null;
+  future.sort((a,b) => a.time - b.time);
+  return future[0].iso;
+};
 
-  const nextUpcoming = useMemo(() => {
-    if (!task) return null;
-    const now = Date.now();
-    const arr = (task.followUps || []).filter(fu => fu.date).map(fu => ({ iso: fu.date, t: new Date(fu.date).getTime() }));
-    if (task.followUpDate) arr.push({ iso: task.followUpDate, t: new Date(task.followUpDate).getTime() });
-    const upcoming = arr.filter(a => a.t >= now);
-    if (upcoming.length) {
-      upcoming.sort((a,b) => a.t - b.t);
-      return upcoming[0].iso;
-    }
-    return null;
+export default function TaskDetail({
+  task,
+  onClose = () => {},
+  onDelete = () => {},
+  onDeleteFollowUp = () => {},
+  onUpdateStatus = () => {}
+}) {
+  const [status, setStatus] = useState(task?.status || "Pending");
+
+  useEffect(() => {
+    setStatus(task?.status || "Pending");
   }, [task]);
+
+  const upcoming = useMemo(() => nextUpcoming(task), [task]);
+
+  if (!task) return null;
 
   const handleStatusChange = (v) => {
     setStatus(v);
     onUpdateStatus(task.id, v);
   };
 
-  if (!task) return null;
-
   return (
-    <div className="modal-overlay">
-      <div className="modal-container">
-        <h2 style={{marginTop:0, marginBottom:6, fontSize:18}}>{task.name}</h2>
+    <div className="modal-overlay" role="dialog" aria-modal="true">
+      <div className="modal-container taskdetail-modal" role="document">
+        <button className="modal-close" onClick={onClose} aria-label="Close">✕</button>
 
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:10}}>
-          <div style={{fontSize:13}}><strong>Created:</strong> <span className="time-created">{fmt(task.createdAt)}</span></div>
-          <div style={{fontSize:13}}><strong>Next:</strong> <span className="time-followup">{ nextUpcoming ? fmt(nextUpcoming) : (task.followUpDate ? fmt(task.followUpDate) : '-') }</span></div>
+        <div className="taskdetail-head">
+          <h2 className="task-title">{task.name}</h2>
         </div>
 
-        <div style={{marginTop:12}}>
-          <label style={{fontWeight:700, fontSize:13}}>Status</label>
-          <select value={status} onChange={(e)=>handleStatusChange(e.target.value)} style={{width:'100%', padding:10, borderRadius:8, marginTop:8}}>
+        <div className="taskdetail-meta">
+          <div className="meta-block">
+            <div className="meta-label">Created</div>
+            <div className="meta-value created">{fmt(task.createdAt)}</div>
+          </div>
+
+          <div className="meta-block">
+            <div className="meta-label">Next</div>
+            <div className="meta-value next">{fmt(upcoming || task.followUpDate)}</div>
+          </div>
+        </div>
+
+        <div className="taskdetail-section">
+          <label className="field-label">Status</label>
+          <select className="form-select" value={status} onChange={(e) => handleStatusChange(e.target.value)}>
             <option>Pending</option>
             <option>Completed</option>
           </select>
         </div>
 
-        <div style={{marginTop:12}}>
-          <label style={{fontWeight:700, fontSize:13}}>Notes</label>
-          <div className="readonly-field" style={{marginTop:8}}>{task.notes || 'No notes'}</div>
+        <div className="taskdetail-section">
+          <label className="field-label">Notes</label>
+          <div className="note-box">{task.notes || "No notes"}</div>
         </div>
 
-        <div style={{marginTop:12}}>
-          <strong>Follow-ups</strong>
-          {(!task.followUps || task.followUps.length===0) ? <div style={{color:'#6b7280', marginTop:8}}>No follow-ups</div> : (
-            <div style={{marginTop:8, display:'flex', flexDirection:'column', gap:8}}>
-              {[...task.followUps].sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0)).map((fu, idx)=>(
-                <div key={idx} style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8, background:'#fbfcff', padding:8, borderRadius:8}}>
-                  <div style={{maxWidth:'70%'}}>
-                    <div style={{fontWeight:700}}>{fu.title || 'Follow-Up'}</div>
-                    <div style={{color:'#374151', fontSize:13}}>{fu.notes || ''}</div>
+        <div className="taskdetail-section">
+          <h3 className="followups-heading">Follow-ups</h3>
+          {(task.followUps || []).length === 0 ? (
+            <div className="no-followups">No follow-ups</div>
+          ) : (
+            <div className="followups-list">
+              {[...task.followUps].sort((a,b) => new Date(b.date || b.createdAt || 0) - new Date(a.date || a.createdAt || 0)).map((fu) => (
+                <div key={fu.createdAt || fu.date} className="followup-row">
+                  <div className="follow-left">
+                    <div className="follow-title">{fu.title || "Follow-up"}</div>
+                    <div className="follow-notes">{fu.notes || ""}</div>
                   </div>
-                  <div style={{textAlign:'right'}}>
-                    <div className="time-followup">{fu.date ? fmt(fu.date) : (fu.createdAt ? fmt(fu.createdAt) : '')}</div>
-                    <div style={{fontSize:12, color:'#6b7280'}}>{fu.status || 'Pending'}</div>
-                    <div style={{marginTop:6}}>
-                      <button className="btn-small" onClick={()=>onDeleteFollowUp(task.id, fu.createdAt)} style={{background:'#fff', border:'1px solid #ef4444', color:'#ef4444'}}>Delete</button>
+                  <div className="follow-right">
+                    <div className="follow-date">{fmt(fu.date || fu.createdAt)}</div>
+                    <div className="follow-status">{fu.status || "Pending"}</div>
+                    <div style={{marginTop:8}}>
+                      <button className="btn-small" onClick={() => onDeleteFollowUp(task.id, fu.createdAt)}>Delete</button>
                     </div>
                   </div>
                 </div>
@@ -83,9 +111,12 @@ export default function TaskDetail({ task, onClose = () => {}, onDelete = () => 
           )}
         </div>
 
-        <div style={{display:'flex', gap:10, marginTop:16}}>
+        <div className="modal-actions">
           <button className="btn-cancel" onClick={onClose}>Close</button>
-          <button className="btn-delete" onClick={()=>{ onDelete(task.id); onClose(); }}>Delete</button>
+          <button
+            className="btn-delete"
+            onClick={() => { if (window.confirm("Delete this task?")) { onDelete(task.id); onClose(); } }}
+          >Delete</button>
         </div>
       </div>
     </div>
