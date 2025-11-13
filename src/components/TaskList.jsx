@@ -25,6 +25,9 @@ const isToday = (iso) => {
          d.getDate() === t.getDate();
 };
 
+/* Safe string -> lower for search */
+const norm = (v) => (v === null || v === undefined) ? "" : String(v).toLowerCase();
+
 export default function TaskList({
   tasks = [],
   searchTerm = "",
@@ -34,21 +37,49 @@ export default function TaskList({
   const [filter, setFilter] = useState("all");
 
   const filtered = useMemo(() => {
+    // copy and sort newest first
     let list = [...tasks].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
-    // search
+
+    // normalize query
     const q = (searchTerm || "").trim().toLowerCase();
+
+    // if query present, filter by multiple fields:
+    // - task name, project, department, notes
+    // - follow-ups: title, notes, contact name/phone
     if (q) {
-      list = list.filter(t =>
-        (t.name || "").toLowerCase().includes(q) ||
-        (t.project || "").toLowerCase().includes(q) ||
-        (t.department || "").toLowerCase().includes(q) ||
-        (t.notes || "").toLowerCase().includes(q)
-      );
+      list = list.filter(t => {
+        // check main fields
+        if (norm(t.name).includes(q)) return true;
+        if (norm(t.project).includes(q)) return true;
+        if (norm(t.department).includes(q)) return true;
+        if (norm(t.notes).includes(q)) return true;
+
+        // check contact in task (if present)
+        if (t.contact) {
+          if (norm(t.contact.name).includes(q)) return true;
+          if (norm(t.contact.phone).includes(q)) return true;
+        }
+
+        // check followUps array
+        if (Array.isArray(t.followUps)) {
+          for (const fu of t.followUps) {
+            if (norm(fu.title).includes(q)) return true;
+            if (norm(fu.notes).includes(q)) return true;
+            if (norm(fu.status).includes(q)) return true;
+            if (fu.contact) {
+              if (norm(fu.contact.name).includes(q)) return true;
+              if (norm(fu.contact.phone).includes(q)) return true;
+            }
+          }
+        }
+
+        return false;
+      });
     }
 
-    // filter tabs
+    // apply tab filter
     if (filter === "today") {
-      list = list.filter(t => isToday(t.createdAt) || (t.followUpDate && isToday(t.followUpDate)));
+      list = list.filter(t => isToday(t.createdAt) || (t.followUpDate && isToday(t.followUpDate)) || (t.followUps || []).some(fu => isToday(fu.date)));
     } else if (filter === "pending") {
       list = list.filter(t => (t.status || "Pending") === "Pending");
     } else if (filter === "completed") {
@@ -74,19 +105,17 @@ export default function TaskList({
           </div>
         ) : (
           filtered.map(task => {
-            // compute next follow-up (prefer followUpDate then last followUp)
+            // compute next follow-up
             let nextIso = task.followUpDate || null;
-            // If there are followUps, pick the earliest upcoming or the last created if none upcoming:
             if (task.followUps && task.followUps.length) {
               const upcoming = task.followUps
                 .filter(f => f.date)
-                .map(f => ({iso: f.date, t: new Date(f.date).getTime()}))
+                .map(f => ({ iso: f.date, t: new Date(f.date).getTime() }))
                 .filter(x => x.t >= Date.now())
                 .sort((a,b) => a.t - b.t);
               if (upcoming.length) {
                 nextIso = upcoming[0].iso;
               } else {
-                // fallback: last follow-up by createdAt
                 const last = [...task.followUps].sort((a,b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date))[0];
                 if (last) nextIso = last.date || last.createdAt;
               }
