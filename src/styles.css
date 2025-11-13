@@ -270,4 +270,75 @@ body{
 
   color: var(--danger) !important;
 }
+/* ---------- Modal viewport & spacing fixes ---------- */
+
+/* Ensure modal never exceeds viewport and becomes scrollable */
+.modal-container,
+.settings-modal {
+  /* leave space for the sticky top header and bottom nav */
+  max-height: calc(100vh - 160px) !important;
+  overflow-y: auto !important;
+  margin: 36px auto !important;
+  padding-bottom: 28px !important; /* ensure bottom buttons are visible */
+}
+
+/* Make sure the settings-list area can scroll independently if needed */
+.settings-list {
+  max-height: 38vh !important; /* capped height so the whole modal remains visible */
+  overflow-y: auto !important;
+}
+
+/* Prevent the page behind from scrolling while modal is open (optional) */
+/* If you already control body overflow elsewhere, skip this */
+.modal-overlay.open-lock {
+  overflow: hidden;
+}
+
+/* Make the Close button float inside modal without overlapping content */
+.settings-close {
+  z-index: 1401; /* above modal contents */
+}
+
+/* Confirm (mini) modal: center it and bring to top */
+.mini-modal {
+  position: fixed !important;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  z-index: 1500 !important;
+  background: rgba(0,0,0,0.35);
+}
+.mini-box {
+  width: min(92%, 420px) !important;
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.2);
+}
+
+/* Make sure the modal inner content (title / lists) keeps readable spacing */
+.settings-item-left {
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+/* Extra bottom safe area so Close / Delete buttons are visible on mobile */
+.modal-container .btn-cancel,
+.modal-container .btn-delete {
+  margin-bottom: 8px;
+}
+
+/* For very small screens, shrink header margin so modal content moves into view */
+@media (max-width:420px) {
+  .modal-container, .settings-modal {
+    max-height: calc(100vh - 120px) !important;
+    margin: 20px auto !important;
+    padding-bottom: 38px !important;
+  }
+  .settings-list { max-height: 44vh !important; }
+}
 
