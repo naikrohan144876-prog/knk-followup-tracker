@@ -1,101 +1,128 @@
 // src/components/TaskList.jsx
 import React, { useMemo, useState } from "react";
 
-/* date formatter dd/mm/yyyy, hh:mm AM/PM */
+/* helper: format dd/mm/yyyy, h:mm AM/PM */
 const fmt = (iso) => {
-  if (!iso) return "";
+  if (!iso) return "-";
   const d = new Date(iso);
-  const day = String(d.getDate()).padStart(2,'0');
-  const mon = String(d.getMonth()+1).padStart(2,'0');
+  if (isNaN(d.getTime())) return "-";
+  const day = String(d.getDate()).padStart(2, "0");
+  const mon = String(d.getMonth() + 1).padStart(2, "0");
   const yr = d.getFullYear();
-  const hh = d.getHours() % 12 || 12;
-  const mm = String(d.getMinutes()).padStart(2,'0');
-  const am = d.getHours() >= 12 ? 'PM' : 'AM';
-  return `${day}/${mon}/${yr}, ${hh}:${mm} ${am}`;
+  const hours = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  const hour12 = hours % 12 || 12;
+  return `${day}/${mon}/${yr}, ${hour12}:${minutes} ${ampm}`;
 };
 
-/* find earliest upcoming follow-up or null */
-const getNextUpcoming = (task) => {
-  const now = Date.now();
-  const arr = (task.followUps || []).filter(fu => fu.date).map(fu => ({ iso: fu.date, t: new Date(fu.date).getTime() }));
-  if (task.followUpDate) arr.push({ iso: task.followUpDate, t: new Date(task.followUpDate).getTime() });
-  const upcoming = arr.filter(a => a.t >= now);
-  if (upcoming.length) {
-    upcoming.sort((a,b) => a.t - b.t);
-    return upcoming[0].iso;
-  }
-  return null;
+const isToday = (iso) => {
+  if (!iso) return false;
+  const d = new Date(iso);
+  const t = new Date();
+  return d.getFullYear() === t.getFullYear() &&
+         d.getMonth() === t.getMonth() &&
+         d.getDate() === t.getDate();
 };
 
-export default function TaskList({ tasks = [], searchTerm = "", onOpenDetail = () => {}, onOpenFollowUp = () => {} }) {
+export default function TaskList({
+  tasks = [],
+  searchTerm = "",
+  onOpenDetail = () => {},
+  onOpenFollowUp = () => {}
+}) {
   const [filter, setFilter] = useState("all");
 
   const filtered = useMemo(() => {
+    let list = [...tasks].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+    // search
     const q = (searchTerm || "").trim().toLowerCase();
-    let list = (tasks || []).slice();
     if (q) {
-      list = list.filter(t => {
-        if ((t.name || "").toLowerCase().includes(q)) return true;
-        if ((t.project || "").toLowerCase().includes(q)) return true;
-        if ((t.department || "").toLowerCase().includes(q)) return true;
-        if ((t.notes || "").toLowerCase().includes(q)) return true;
-        // follow-up notes or title
-        if ((t.followUps || []).some(fu => ((fu.notes||"") + " " + (fu.title||"")).toLowerCase().includes(q))) return true;
-        return false;
-      });
+      list = list.filter(t =>
+        (t.name || "").toLowerCase().includes(q) ||
+        (t.project || "").toLowerCase().includes(q) ||
+        (t.department || "").toLowerCase().includes(q) ||
+        (t.notes || "").toLowerCase().includes(q)
+      );
     }
 
-    // simple filter shortcuts
-    if (filter === "pending") list = list.filter(t => (t.status || "Pending") === "Pending" || (t.followUps || []).some(fu => (fu.status||"Pending")==="Pending"));
-    if (filter === "completed") list = list.filter(t => (t.status || "Pending") === "Completed");
+    // filter tabs
     if (filter === "today") {
-      const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-      const todayEnd = new Date(todayStart); todayEnd.setDate(todayEnd.getDate()+1);
-      list = list.filter(t => new Date(t.createdAt) >= todayStart && new Date(t.createdAt) < todayEnd);
+      list = list.filter(t => isToday(t.createdAt) || (t.followUpDate && isToday(t.followUpDate)));
+    } else if (filter === "pending") {
+      list = list.filter(t => (t.status || "Pending") === "Pending");
+    } else if (filter === "completed") {
+      list = list.filter(t => (t.status || "Pending") === "Completed");
     }
-    // sort newest created first
-    list.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
     return list;
   }, [tasks, searchTerm, filter]);
 
   return (
-    <div className="task-list-wrapper">
-      <div style={{display:'flex', gap:8, justifyContent:'center', marginBottom:12, flexWrap:'wrap'}}>
-        <button className={`filter-btn ${filter==='all' ? 'active' : ''}`} onClick={()=>setFilter('all')}>All</button>
-        <button className={`filter-btn ${filter==='today' ? 'active' : ''}`} onClick={()=>setFilter('today')}>Today</button>
-        <button className={`filter-btn ${filter==='pending' ? 'active' : ''}`} onClick={()=>setFilter('pending')}>Pending</button>
-        <button className={`filter-btn ${filter==='completed' ? 'active' : ''}`} onClick={()=>setFilter('completed')}>Completed</button>
+    <div className="task-list-root">
+      <div className="tabs-row">
+        <button className={`tab ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")}>All</button>
+        <button className={`tab ${filter === "today" ? "active" : ""}`} onClick={() => setFilter("today")}>Today</button>
+        <button className={`tab ${filter === "pending" ? "active" : ""}`} onClick={() => setFilter("pending")}>Pending</button>
+        <button className={`tab ${filter === "completed" ? "active" : ""}`} onClick={() => setFilter("completed")}>Completed</button>
       </div>
 
-      {filtered.length === 0 ? <div className="no-tasks">No tasks yet. Tap + to add.</div> :
-        filtered.map(task => {
-          const next = getNextUpcoming(task);
-          return (
-            <div className="task-item" key={task.id}>
-              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                <div style={{flex:1}}>
-                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:10}}>
-                    <div style={{fontWeight:800, fontSize:16, overflow:'visible'}}>{task.name}</div>
-                    <div style={{display:'flex', gap:8, alignItems:'center'}}>
-                      <div className={`status-badge ${((task.status||'Pending').toLowerCase()==='completed') ? 'completed' : 'pending'}`}>{task.status || 'Pending'}</div>
+      <div className="task-cards">
+        {filtered.length === 0 ? (
+          <div className="empty-state">
+            No tasks found. Tap + to add a task.
+          </div>
+        ) : (
+          filtered.map(task => {
+            // compute next follow-up (prefer followUpDate then last followUp)
+            let nextIso = task.followUpDate || null;
+            // If there are followUps, pick the earliest upcoming or the last created if none upcoming:
+            if (task.followUps && task.followUps.length) {
+              const upcoming = task.followUps
+                .filter(f => f.date)
+                .map(f => ({iso: f.date, t: new Date(f.date).getTime()}))
+                .filter(x => x.t >= Date.now())
+                .sort((a,b) => a.t - b.t);
+              if (upcoming.length) {
+                nextIso = upcoming[0].iso;
+              } else {
+                // fallback: last follow-up by createdAt
+                const last = [...task.followUps].sort((a,b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date))[0];
+                if (last) nextIso = last.date || last.createdAt;
+              }
+            }
+
+            return (
+              <div className="task-card" key={task.id}>
+                <div className="task-left">
+                  <div className="task-title">{task.name}</div>
+                  <div className="task-meta">
+                    <div className="meta-row">
+                      <span className="meta-label">Created:</span>
+                      <span className="meta-value created">{fmt(task.createdAt)}</span>
+                    </div>
+                    <div className="meta-row">
+                      <span className="meta-label meta-next">Next:</span>
+                      <span className="meta-value next">{fmt(nextIso)}</span>
                     </div>
                   </div>
+                </div>
 
-                  <div className="task-dates" style={{marginTop:8}}>
-                    <span className="time-created small">Created: {fmt(task.createdAt)}</span>
-                    { next ? <span style={{marginLeft:12}} className="time-followup small">Next: {fmt(next)}</span> : (task.followUpDate ? <span style={{marginLeft:12}} className="time-followup small">Next: {fmt(task.followUpDate)}</span> : null)}
+                <div className="task-right">
+                  <div className={`status-badge ${((task.status||"Pending").toLowerCase()) === "completed" ? "completed" : "pending"}`}>
+                    {(task.status || "Pending")}
+                  </div>
+
+                  <div className="task-actions">
+                    <button className="icon-btn plus" title="Add follow-up" onClick={() => onOpenFollowUp(task.id)}>+</button>
+                    <button className="icon-btn view" onClick={() => onOpenDetail(task.id)}>View</button>
                   </div>
                 </div>
-
-                <div style={{display:'flex', gap:8, marginLeft:12}}>
-                  <button className="btn-small" onClick={()=>onOpenFollowUp(task.id)}>+</button>
-                  <button className="btn-small" onClick={()=>onOpenDetail(task.id)}>View</button>
-                </div>
               </div>
-            </div>
-          );
-        })
-      }
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
