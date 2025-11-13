@@ -716,6 +716,123 @@ body{
   .task-title { font-size:16px; }
   .task-right { align-items:flex-end; }
 }
+/* ---------- Classy upward-opening popover menu ---------- */
+
+/* overlay covers the whole screen, but is transparent */
+.menu-overlay {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 1400;
+  background: rgba(0,0,0,0.06); /* subtle dim behind */
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+  pointer-events: auto;
+}
+
+/* Popover anchored near top-left button */
+.menu-popover {
+  position: absolute;
+  /* position near the top-left header button (adjust if your header height differs) */
+  left: 14px;
+  top: 74px; /* placed below header, animation makes it appear upward */
+  width: 220px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 26px 60px rgba(12,40,80,0.14);
+  border: 1px solid rgba(14,42,80,0.04);
+  overflow: visible;
+  transform-origin: bottom left; /* animate upward from bottom */
+  animation: menuPopUp 220ms cubic-bezier(.2,.9,.2,1) both;
+}
+
+/* small arrow that points to the button (looks like popover pointing downward) */
+.menu-arrow {
+  position: absolute;
+  left: 18px;
+  bottom: -8px;
+  width: 22px;
+  height: 10px;
+  background: transparent;
+  filter: drop-shadow(0 6px 14px rgba(12,40,80,0.06));
+}
+.menu-arrow::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: 16px;
+  height: 16px;
+  transform: rotate(45deg);
+  background: #fff;
+  border-left: 1px solid rgba(14,42,80,0.03);
+  border-top: 1px solid rgba(14,42,80,0.03);
+  border-radius: 3px;
+}
+
+/* items list */
+.menu-items {
+  display:flex;
+  flex-direction:column;
+  padding: 10px;
+  gap: 6px;
+}
+
+/* each item */
+.menu-item {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  width:100%;
+  text-align:left;
+  border: none;
+  background: transparent;
+  padding: 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight:700;
+  color:#142533;
+}
+.menu-item:hover {
+  background: linear-gradient(180deg,#f3f8ff,#eef6ff);
+}
+
+/* left icon column */
+.menu-item-left { width:26px; display:inline-flex; justify-content:center; align-items:center; font-size:16px; }
+
+/* divider */
+.menu-divider {
+  height:1px;
+  background: rgba(14,42,80,0.03);
+  border-radius:4px;
+  margin: 6px 0;
+}
+
+/* close item style */
+.menu-item.menu-close {
+  color:#bf1e2e;
+}
+
+/* animation: pop upward (translateY positive -> 0, opacity) */
+@keyframes menuPopUp {
+  from {
+    transform: translateY(14px) scale(.98);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* responsive: shift a bit right on very small screens */
+@media (max-width:420px) {
+  .menu-popover { left: 12px; top: 66px; width: 200px; }
+}
 
 
 
