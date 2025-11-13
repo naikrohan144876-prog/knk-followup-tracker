@@ -1,29 +1,53 @@
+// src/components/MenuModal.jsx
 import React from "react";
 
-const MenuModal = ({ open, onClose, onExport, onImportClick, onOpenSettings, version }) => {
+/*
+Props:
+- open (boolean)
+- onClose()
+- onExport()
+- onImportClick()
+- onOpenSettings()
+*/
+export default function MenuModal({ open, onClose = () => {}, onExport = () => {}, onImportClick = () => {}, onOpenSettings = () => {} }) {
   if (!open) return null;
 
+  // Stop overlay click from closing when clicking inside the card
+  const stop = (e) => e.stopPropagation();
+
   return (
-    <div className="menu-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="menu-drawer">
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
-          <h3 style={{margin:0, color:'#1e88e5'}}>Menu</h3>
-          <button className="btn-small" onClick={onClose}>Close</button>
-        </div>
+    <div className="menu-overlay" onClick={onClose} role="presentation" aria-hidden="true">
+      <div className="menu-popover" onClick={stop} role="menu" aria-label="App menu">
+        <div className="menu-arrow" aria-hidden="true" />
+        <div className="menu-items">
+          <button className="menu-item" onClick={() => { onOpenSettings(); onClose(); }}>
+            <span className="menu-item-left">⚙️</span>
+            <span className="menu-item-label">Settings</span>
+          </button>
 
-        <div style={{display:'flex', flexDirection:'column', gap:10}}>
-          <button className="btn-primary" onClick={() => { onExport(); onClose(); }}>Export Backup</button>
-          <button className="btn-primary" onClick={() => { onImportClick(); onClose(); }}>Import Backup</button>
-          <button className="btn-primary" onClick={() => { onOpenSettings(); onClose(); }}>Settings</button>
-        </div>
+          <button className="menu-item" onClick={() => { onExport(); onClose(); }}>
+            <span className="menu-item-left">📤</span>
+            <span className="menu-item-label">Export Data</span>
+          </button>
 
-        <div style={{marginTop:20, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-          <small style={{color:'#6b7280'}}>Version</small>
-          <div style={{padding:'6px 8px', background:'#fff', borderRadius:8, border:'1px solid #eee'}}>{version}</div>
+          <button className="menu-item" onClick={() => { onImportClick(); onClose(); }}>
+            <span className="menu-item-left">📥</span>
+            <span className="menu-item-label">Import Data</span>
+          </button>
+
+          <button className="menu-item" onClick={() => { alert("KNK Followup Tracker v1.0.0"); }}>
+            <span className="menu-item-left">ℹ️</span>
+            <span className="menu-item-label">About</span>
+          </button>
+
+          <div className="menu-divider" />
+
+          <button className="menu-item menu-close" onClick={onClose}>
+            <span className="menu-item-left">✖️</span>
+            <span className="menu-item-label">Close</span>
+          </button>
         </div>
       </div>
     </div>
   );
-};
-
-export default MenuModal;
+}
