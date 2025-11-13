@@ -1,4 +1,6 @@
 // src/App.jsx
+import AddTaskModal from "./components/AddTaskModal";
+
 import React, { useEffect, useState, useRef } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Dashboard from "./components/Dashboard";
