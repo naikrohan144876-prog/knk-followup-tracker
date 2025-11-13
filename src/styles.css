@@ -166,3 +166,19 @@ body{
   .dashboard-screen{ padding:12px 12px 120px; }
   .fab-add{ right:16px; bottom:18px; padding:10px 16px; border-radius:16px; }
 }
+/* Fix: Move Add button up */
+.fab-add {
+  bottom: 90px !important;
+}
+
+/* Fix: Bigger menu button */
+.dot-menu {
+  font-size: 26px !important;
+  padding: 10px 14px !important;
+}
+
+/* Fix: Follow-up date red everywhere */
+.time-followup {
+  color: var(--danger) !important;
+}
+
