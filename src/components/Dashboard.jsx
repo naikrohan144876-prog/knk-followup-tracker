@@ -87,29 +87,61 @@ export default function Dashboard({ tasks = [], onCardClick = () => {} }) {
 
       </div>
 
-      <section className="upcoming-section">
-        <h3 className="upcoming-heading">Upcoming (7 days)</h3>
+     <section className="upcoming-section">
+  <h3 className="upcoming-heading">Upcoming (7 days)</h3>
 
-        {stats.upcoming.length === 0 ? (
-          <div className="no-upcoming small">No upcoming follow-ups</div>
-        ) : (
-          <div className="upcoming-list">
-            {stats.upcoming.map((u, i) => (
-              <div className="upcoming-row" key={i}>
-                <div className="upcoming-left">
-                  <div className="upcoming-task">{u.taskName}</div>
-                  <div className="upcoming-note">{u.title || u.notes}</div>
-                </div>
-                <div className="upcoming-right">
-                  <div className="upcoming-date">{fmtShort(u.when)}</div>
-                  <div className="upcoming-status">{u.status || "Pending"}</div>
-                </div>
-              </div>
-            ))}
+  {stats.upcoming.length === 0 ? (
+    <div className="no-upcoming small">No upcoming follow-ups</div>
+  ) : (
+    <div className="upcoming-list">
+      {stats.upcoming.map((u, i) => (
+        <div className="upcoming-row" key={i}>
+          
+          {/* LEFT SIDE — Task + Note */}
+          <div className="upcoming-left">
+            <div className="upcoming-task">{u.taskName}</div>
+            <div className="upcoming-note">{u.title || u.notes}</div>
           </div>
-        )}
-      </section>
 
+          {/* RIGHT SIDE — Date + Buttons */}
+          <div className="upcoming-right">
+
+            {/* DATE */}
+            <div className="upcoming-date red">{fmtShort(u.when)}</div>
+
+            {/* STATUS DROPDOWN */}
+            <select
+              className="upcoming-status-dropdown"
+              value={u.status}
+              onChange={(e) => updateFollowUpStatus(u.id, e.target.value)}
+            >
+              <option>Pending</option>
+              <option>Completed</option>
+            </select>
+
+            {/* BUTTON WRAP */}
+            <div className="upcoming-actions">
+
+              {/* ADD FOLLOW-UP */}
+              <button
+                className="mini-btn blue"
+                onClick={() => openFollowUpModal(u.taskId)}
+              >
+                +
+              </button>
+
+              {/* VIEW TASK */}
+              <button
+                className="mini-btn"
+                onClick={() => openTaskModal(u.taskId)}
+              >
+                View
+              </button>
+
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
-  );
-}
+  )}
+</section>
